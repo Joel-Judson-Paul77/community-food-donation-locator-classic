@@ -7,10 +7,10 @@ let ready = null;
 
 async function init() {
   if (!process.env.MONGO_URI) {
-    throw new Error('MONGO_URI is not set. Add your MongoDB Atlas connection string in the Vercel project environment variables.');
+    throw Object.assign(new Error('MONGO_URI is not set. Add your MongoDB Atlas connection string in the Vercel project environment variables.'), { expose: true });
   }
   if (!process.env.JWT_SECRET) {
-    throw new Error('JWT_SECRET is not set. Add it in the Vercel project environment variables.');
+    throw Object.assign(new Error('JWT_SECRET is not set. Add it in the Vercel project environment variables.'), { expose: true });
   }
   const { default: app } = await import('../../server/src/app.js');
   const { connectDB } = await import('../../server/src/config/db.js');
@@ -33,6 +33,7 @@ export default async function handler(req, res) {
     console.error('API startup failed:', err);
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ message: err.message || 'API failed to start' }));
+    // Never leak driver errors (they can echo parts of the connection string)
+    res.end(JSON.stringify({ message: err.expose ? err.message : 'Database connection failed. Check MONGO_URI in the Vercel environment variables and the Vercel function logs.' }));
   }
 }
