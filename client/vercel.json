@@ -1,0 +1,8 @@
+{
+  "installCommand": "npm install && MONGOMS_DISABLE_POSTINSTALL=1 npm install --prefix ../server --omit=dev",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/uploads/(.*)", "destination": "/api" },
+    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
+  ]
+}
