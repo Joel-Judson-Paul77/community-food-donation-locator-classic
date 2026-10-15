@@ -1,5 +1,5 @@
 # Community Food Donation and Surplus Locator
-
+Deployed on vercel in https://community-food-donation-locator-cla.vercel.app/
 A platform that helps communities donate, discover, and claim surplus food.
 
 Restaurants, stores, caterers and households post extra food with a pickup location and deadline. NGOs, shelters and individuals find it on a live map, request what they need, and collect it once the donor approves.
