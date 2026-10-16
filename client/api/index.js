@@ -4,6 +4,9 @@
 // the original URL and routes as usual.
 
 let ready = null;
+let refresh = null;
+let lastRefresh = 0;
+const REFRESH_EVERY_MS = 15 * 60 * 1000;
 
 async function init() {
   if (!process.env.MONGO_URI) {
@@ -14,12 +17,13 @@ async function init() {
   }
   const { default: app } = await import('../../server/src/app.js');
   const { connectDB } = await import('../../server/src/config/db.js');
-  const { seedDatabase } = await import('../../server/src/seed/seedData.js');
+  const { seedDatabase, refreshDemoListings } = await import('../../server/src/seed/seedData.js');
   const { default: User } = await import('../../server/src/models/User.js');
 
   await connectDB();
   // Fresh database: load the demo data once so the site isn't empty
   if ((await User.estimatedDocumentCount()) === 0) await seedDatabase();
+  refresh = refreshDemoListings;
   return app;
 }
 
@@ -27,6 +31,11 @@ export default async function handler(req, res) {
   try {
     ready ??= init();
     const app = await ready;
+    // Re-open expired demo listings (cheap; at most every 15 minutes per instance)
+    if (refresh && Date.now() - lastRefresh > REFRESH_EVERY_MS) {
+      lastRefresh = Date.now();
+      await refresh().catch((e) => console.error('Demo refresh failed:', e.message));
+    }
     return app(req, res);
   } catch (err) {
     ready = null; // retry on the next request

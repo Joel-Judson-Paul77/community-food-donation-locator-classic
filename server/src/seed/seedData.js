@@ -143,3 +143,44 @@ export async function seedDatabase({ reset = false } = {}) {
 
   return { users: users.length, donations: donations.length, claims: claims.length };
 }
+
+/**
+ * Keeps the demo listings usable on a long-running deployment: seeded food
+ * has pick-up deadlines of hours/days, so a few days after seeding the site
+ * would look empty. This re-opens only the *seeded* listings (matched by demo
+ * donor + title) once they have expired, and never touches data users created.
+ * Quantity already promised to approved requests stays reserved.
+ */
+export async function refreshDemoListings() {
+  const demoDonors = await User.find({
+    role: 'donor',
+    email: { $in: users.filter((u) => u.role === 'donor').map((u) => u.email) },
+  }).select('_id email');
+  const byEmail = Object.fromEntries(demoDonors.map((d) => [d.email, d._id]));
+  const donorEmail = Object.fromEntries(users.map((u) => [u.key, u.email]));
+
+  let renewed = 0;
+  for (const seed of donations) {
+    if (seed.status) continue; // history rows stay as they are
+    const donorId = byEmail[donorEmail[seed.donor]];
+    if (!donorId) continue;
+    const doc = await Donation.findOne({ donor: donorId, title: seed.title });
+    if (!doc) continue;
+    const stale = doc.status === 'expired' || (doc.status === 'available' && doc.expiresAt <= new Date());
+    if (!stale) continue;
+
+    const [reserved] = await Claim.aggregate([
+      { $match: { donation: doc._id, status: 'approved' } },
+      { $group: { _id: null, qty: { $sum: '$quantity' } } },
+    ]);
+    const left = Math.max(0, doc.quantity - (reserved?.qty || 0));
+    // Keep a sensible window: at least 2 days of pick-up time
+    const hoursLeft = Math.max(48, Math.round((seed.expiresAt - Date.now()) / 36e5));
+    doc.status = left > 0 ? 'available' : 'reserved';
+    doc.quantityAvailable = left;
+    doc.expiresAt = new Date(Date.now() + hoursLeft * 36e5);
+    await doc.save();
+    renewed += 1;
+  }
+  return renewed;
+}
